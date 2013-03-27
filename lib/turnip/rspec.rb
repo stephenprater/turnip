@@ -54,7 +54,7 @@ module Turnip
           step.run(self, ::RSpec.configuration.reporter)
           step.execution_result[:status]
         rescue Turnip::Pending
-          pending("No such step: '#{step}'")
+          pending("No such step: '#{step}'") and return "pending"
         end
       end
     end
