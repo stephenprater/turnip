@@ -42,17 +42,17 @@ module Turnip
       
       def fake_example feature_file, step
         meta = self.class.metadata.clone
-        meta[:caller] = ["#{feature_file}:#{step.line} in `#{step.description}'"]
-        meta[:description] = step.description
+        meta[:caller] = ["#{feature_file}:#{step.line} in step `#{step.description}'"]
+        meta[:description] = "#{step.keyword} #{step.description}"
         meta[:type] = :step
-        Turnip::StepExample.new(self.class, "Step: #{step.description}", meta, proc { step(step) })
+        Turnip::StepExample.new(self.class, "#{step.keyword} #{step.description}", meta, proc { step(step) })
       end
 
       def run_step(feature_file, step)
         step = fake_example(feature_file,step)
         begin
           step.run(self, ::RSpec.configuration.reporter)
-          step.execution_result[:status] == "passed"
+          step.execution_result[:status]
         rescue Turnip::Pending
           pending("No such step: '#{step}'")
         end
@@ -82,11 +82,17 @@ module Turnip
             feature.scenarios.each do |scenario|
               describe scenario.name, scenario.metadata_hash do
                 it scenario.name do |ex|
+                  scen_location = ["#{feature_file}:#{scenario.line} in Scenario: #{scenario.name}"] 
                   steps = scenario.steps.collect do |step|
-                    run_step(feature_file, step)
+                    r = run_step(feature_file, step)
+                    if r == "pending" && step.keyword == "Given"
+                      e = StepException.new("Pending Given prevents scenario from executing", scen_location)
+                      example.metadata[:caller] = scen_location
+                      raise e
+                    end
+                    r
                   end
-                  if steps.include? false
-                    scen_location = ["#{feature_file}:#{feature.line} in Scenario: #{feature.name}"] 
+                  if steps.include? "failed"
                     e = StepException.new("Scenario failed because a step failed", scen_location)
                     example.metadata[:caller] = scen_location
                     raise e

@@ -5,3 +5,8 @@ Feature: A simple feature
     Then it should die
     And it should not come back to life
     And then we have to kill it again
+
+  Scenario: This feature is never executed
+    Given a pending given
+    Then this is not executed
+  

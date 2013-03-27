@@ -2,6 +2,10 @@ step "there is a monster" do
   @monster = 1
 end
 
+step "a pending given" do
+  pending
+end
+
 step "there is a strong monster" do
   @monster = 2
 end

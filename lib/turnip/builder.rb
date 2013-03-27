@@ -62,6 +62,10 @@ module Turnip
         @raw = raw
         @steps = []
       end
+
+      def line
+        @raw.line
+      end
     end
 
     class ScenarioOutline
@@ -99,7 +103,7 @@ module Turnip
       end
     end
 
-    class Step < Struct.new(:description, :extra_args, :line)
+    class Step < Struct.new(:description, :extra_args, :line, :keyword)
       # 1.9.2 support hack
       def split(*args)
         self.to_s.split(*args)
@@ -155,7 +159,7 @@ module Turnip
       elsif step.rows
         extra_args.push Turnip::Table.new(step.rows.map { |row| row.cells(&:value) })
       end
-      @current_step_context.steps << Step.new(step.name, extra_args, step.line)
+      @current_step_context.steps << Step.new(step.name, extra_args, step.line, step.keyword.chop)
     end
 
     def uri(*)
