@@ -45,7 +45,7 @@ module Turnip
         meta[:caller] = ["#{feature_file}:#{step.line} in step `#{step.description}'"]
         meta[:description] = "#{step.keyword} #{step.description}"
         meta[:type] = :step
-        Turnip::StepExample.new(self.class, "#{step.keyword} #{step.description}", meta, proc { step(step) })
+        Turnip::StepExample.new(self.class, "-> #{step.keyword} #{step.description}", meta, proc { step(step) })
       end
 
       def run_step(feature_file, step)
@@ -81,21 +81,24 @@ module Turnip
             end
             feature.scenarios.each do |scenario|
               describe scenario.name, scenario.metadata_hash do
-                it scenario.name do |ex|
+                # the example_group name and example name are both based
+                # on the scenario, so the output has a lot of confusing
+                # repetition in it. making the example name be blank looks
+                # a lot cleaner
+                it " " do |ex|
                   scen_location = ["#{feature_file}:#{scenario.line} in Scenario: #{scenario.name}"] 
+                  example.metadata[:line_number] = scenario.line
+                  ex = StepException.new(nil, scen_location) 
+
                   steps = scenario.steps.collect do |step|
                     r = run_step(feature_file, step)
                     if r == "pending" && step.keyword == "Given"
-                      e = StepException.new("Pending Given prevents scenario from executing", scen_location)
-                      example.metadata[:caller] = scen_location
-                      raise e
+                      raise ex, "Pending Given prevents scenario from executing" 
                     end
                     r
                   end
                   if steps.include? "failed"
-                    e = StepException.new("Scenario failed because a step failed", scen_location)
-                    example.metadata[:caller] = scen_location
-                    raise e
+                    raise ex, "Scenario failed because not all steps passed." 
                   end
                 end
               end

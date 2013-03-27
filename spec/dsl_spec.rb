@@ -12,16 +12,16 @@ Feature with before steps in steps file
 before all
   can stick some before / after stuff in the steps file
 before each
-    a step
-    b step
+    Given a step
+    Given b step
 after each
-    can stick some before / after stuff in the steps file
+    
   can run a before step before each scenario
 before each
-    a step
-    b step
+    Given a step
+    Given b step
 after each
-    can run a before step before each scenario
+
 after all
       OUTPUT
     end
