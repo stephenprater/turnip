@@ -1,5 +1,6 @@
 require "turnip"
 require "rspec"
+require 'pry'
 
 module Turnip
   module RSpec
@@ -38,16 +39,31 @@ module Turnip
     #
     module Execute
       include Turnip::Execute
+      
+      def fake_example feature_file, step
+        meta = self.class.metadata.clone
+        meta[:caller] = ["#{feature_file}:#{step.line} in `#{step.description}'"]
+        meta[:description] = step.description
+        meta[:type] = :step
+        Turnip::StepExample.new(self.class, "Step: #{step.description}", meta, proc { step(step) })
+      end
 
       def run_step(feature_file, step)
+        step = fake_example(feature_file,step)
         begin
-          step(step)
+          step.run(self, ::RSpec.configuration.reporter)
+          step.execution_result[:status] == "passed"
         rescue Turnip::Pending
           pending("No such step: '#{step}'")
-        rescue StandardError => e
-          e.backtrace.push "#{feature_file}:#{step.line}:in `#{step.description}'"
-          raise e
         end
+      end
+    end
+
+    class StepException < StandardError
+      attr_accessor :backtrace
+      def initialize(message, backtrace)
+        self.backtrace = backtrace
+        super(message)
       end
     end
 
@@ -65,9 +81,15 @@ module Turnip
             end
             feature.scenarios.each do |scenario|
               describe scenario.name, scenario.metadata_hash do
-                it scenario.steps.map(&:description).join(' -> ') do
-                  scenario.steps.each do |step|
+                it scenario.name do |ex|
+                  steps = scenario.steps.collect do |step|
                     run_step(feature_file, step)
+                  end
+                  if steps.include? false
+                    scen_location = ["#{feature_file}:#{feature.line} in Scenario: #{feature.name}"] 
+                    e = StepException.new("Scenario failed because a step failed", scen_location)
+                    example.metadata[:caller] = scen_location
+                    raise e
                   end
                 end
               end
@@ -85,4 +107,5 @@ end
   config.include Turnip::RSpec::Execute, turnip: true
   config.include Turnip::Steps, turnip: true
   config.pattern << ",**/*.feature"
+  config.backtrace_clean_patterns << /lib\/turnip/
 end

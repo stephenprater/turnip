@@ -6,21 +6,22 @@ describe Turnip::DSL do
 
   describe '.steps_for before dsl' do
     it "executes a feature file where steps includs before and after" do
-      result = %x(rspec -fs examples/before_steps.feature)
+      result = %x(rspec -fd examples/before_steps.feature)
       result.should include <<-OUTPUT
+Feature with before steps in steps file
 before all
   can stick some before / after stuff in the steps file
 before each
-a step
-b step
+    a step
+    b step
 after each
-    a step -> b step
+    can stick some before / after stuff in the steps file
   can run a before step before each scenario
 before each
-a step
-b step
+    a step
+    b step
 after each
-    a step -> b step
+    can run a before step before each scenario
 after all
       OUTPUT
     end

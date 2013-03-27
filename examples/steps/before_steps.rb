@@ -16,10 +16,8 @@ steps_for(:before) do
   end
 
   step "a step" do
-    puts "a step"
   end
 
   step "b step" do
-    puts "b step"
   end
 end

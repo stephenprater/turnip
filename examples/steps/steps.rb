@@ -14,6 +14,15 @@ step "it should die" do
   @monster.should eq(0)
 end
 
+step "it should not come back to life" do
+  #yes, this step fails
+  @monster.should_not eq(0)
+end
+
+step "then we have to kill it again" do
+  pending "on it"
+end
+
 step "this is ambiguous" do
 end
 
