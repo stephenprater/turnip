@@ -6,6 +6,10 @@ step "a pending given" do
   pending
 end
 
+step "this is not executed" do
+  raise "monster eats your face"
+end
+
 step "there is a strong monster" do
   @monster = 2
 end

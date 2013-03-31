@@ -6,7 +6,9 @@ Feature: A simple feature
     And it should not come back to life
     And then we have to kill it again
 
-  Scenario: This feature is never executed
+  Scenario: Additional steps are not executed if preceded by a pending 
     Given a pending given
     Then this is not executed
-  
+    And neither is this
+    And neither is this
+    And neither is this

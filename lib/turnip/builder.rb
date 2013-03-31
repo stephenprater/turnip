@@ -57,6 +57,7 @@ module Turnip
       include Name
 
       attr_accessor :steps
+      attr_accessor :pending_step
 
       def initialize(raw)
         @raw = raw
@@ -65,6 +66,10 @@ module Turnip
 
       def line
         @raw.line
+      end
+
+      def pending_step?
+        !!@pending_step
       end
     end
 
@@ -90,7 +95,7 @@ module Turnip
                 next ea unless ea.instance_of?(Turnip::Table)
                 Turnip::Table.new(ea.map {|t_row| t_row.map {|t_col| substitute(t_col, headers, row) } })
               end
-              Step.new(new_description, new_extra_args, step.line)
+              Step.new(new_description, new_extra_args, step.line, step.keyword)
             end
           end
         end

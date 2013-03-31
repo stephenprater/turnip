@@ -17,13 +17,12 @@ module Turnip
           singleton_class.send(:define_method, :tag) { tag }
 
           [:before, :after, :around].each do |hook|
-            singleton_class.send(:define_method, hook) do |scope, options = {}, &block|
+            singleton_class.send(:define_method, hook) do |scope, options = {}, &blk|
               ::RSpec.configure do |config|
-                config.send(hook, scope, { tag => true }.merge(options), &block)
+                config.send(hook, scope, { tag => true }.merge(options), &blk)
               end
             end
           end
-
 
           module_eval(&block)
           ::RSpec.configure { |c| c.include self, tag => true }
