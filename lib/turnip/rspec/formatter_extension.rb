@@ -1,3 +1,6 @@
+require 'rspec/core/formatters/html_formatter'
+require 'rspec/core/formatters/json_formatter'
+
 module Turnip
   module RSpec
     module ReporterExtension
@@ -24,10 +27,9 @@ module Turnip
       def notify method, *args, &block
         @formatters.each do |formatter|
           if output == :silence
-            formatter.instance_variable_set('@output', StringIO.new)
+            formatter.output = StringIO.new
           elsif output == :speak
-            output = formatter.instance_variable_get('@loud_output')
-            formatter.instance_variable_set('@output', output)
+            formatter.output = formatter.loud_output
           end
         end
         super(method, *args, &block)
@@ -41,8 +43,16 @@ module Turnip
     #
     module FormatterExtension
       def self.extended base
-        base.instance_eval do
-          @loud_output = @output.clone
+
+        base.class.send :attr_accessor, :loud_output
+        base.class.send :attr_accessor, :output
+        base.loud_output = base.output.clone
+
+        case base
+        when ::RSpec::Core::Formatters::HtmlFormatter
+          base.extend Turnip::RSpec::HtmlFormatterExtension
+        when ::RSpec::Core::Formatters::JsonFormatter
+          base.extend Turnip::RSpec::JsonFormatterExtension
         end
       end
 
@@ -67,6 +77,60 @@ module Turnip
           dump_stubs
         end
         super(*args)
+      end
+    end
+
+    ##
+    #
+    # Addresses an implmentation problem in the HTML formatter in that the
+    # `printer` object directly addresses the output object by it's own
+    # reference rather than through an accessor, or even more prefereably, the
+    # accessor of the formatter object
+    #
+    module HtmlFormatterExtension
+      def output= arg
+        @output = arg
+        @printer.instance_eval do
+          @output = arg 
+        end
+      end
+    end
+
+    ##
+    # 
+    # The JsonFormatter doesn't actually output data in a stream, but rather
+    # waits until the 'stop' method is called and then builds a hash from all of
+    # the data - address this by removing "silent" examples before the formatter
+    # flushes it's output
+    #
+    module JsonFormatterExtension
+      def example_started ex
+        unless ex.metadata[:silent] == true
+          super(ex)
+        end
+      end
+
+      def stop
+        super
+        @output_hash[:examples] = examples.map do |example|
+          {
+            :description => example.description,
+            :full_description => example.full_description,
+            :status => example.execution_result[:status],
+            # :example_group,
+            # :execution_result,
+            :file_path => example.metadata[:file_path],
+            :line_number  => example.metadata[:line_number],
+          }.tap do |hash|
+            if e=example.exception
+              hash[:exception] =  {
+                :class => e.class.name,
+                :message => e.message,
+                :backtrace => e.backtrace,
+              }
+            end
+          end
+        end
       end
     end
   end

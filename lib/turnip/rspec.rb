@@ -92,6 +92,8 @@ module Turnip
                   nil
                 end
 
+                
+
                 # what is going on here?
                 # an "it" block creates an RSpec example for later execution
                 # but steps are not equivalent to an example, since they should
@@ -100,7 +102,10 @@ module Turnip
                 # the same way an example does.  So without REALLY abusing global state and
                 # a lot spooky action at a distance it doesn't make
                 # sense to map examples to steps. (you'd basically need to
-                # rewrite the entire CONCEPT of an example)
+                # rewrite the entire CONCEPT of an example) additionally
+                #
+                # the other issues is of course before hooks. before hooks run
+                # before scenarios and not steps.
                 #
                 # instead, we run each step within an example - and change the
                 # name of the example based on the execution step that failed.
@@ -134,7 +139,6 @@ module Turnip
                 # if the step enumerator is not exhausted when this step is run then
                 # it will report all additional steps as pending with the 'parent' step
                 # in the reason
-               
                 it "__temp_step", :silent => true do
                   if scenario.pending_step?
                     while step = step_fiber.resume do

@@ -60,6 +60,7 @@ module Turnip
         begin
           begin
             time = ::RSpec::Core::Time.now
+            reporter.example_started(self)
             @example_group_instance.instance_eval(&@example_block)
           ensure
             time = (::RSpec::Core::Time.now - time).to_f
