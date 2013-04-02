@@ -1,7 +1,3 @@
-require 'pry'
-
-$nesting = 0
-
 module Turnip
   module RSpec
     module SilentExampleExtension
@@ -18,10 +14,16 @@ module Turnip
       # stuff with prepend
       #
       def run_with_silent(example_group_instance, reporter)
-        @metadata[:silent] ?  reporter.silence! : reporter.speak!
-        run_without_silent(example_group_instance, reporter)
-      ensure
-        reporter.restore!
+        if reporter.respond_to? :silence!
+          begin
+            @metadata[:silent] ?  reporter.silence! : reporter.speak!
+            run_without_silent(example_group_instance, reporter)
+          ensure
+            reporter.restore!
+          end
+        else
+          run_without_silent(example_group_instance, reporter)
+        end
       end
 
       def self.included base

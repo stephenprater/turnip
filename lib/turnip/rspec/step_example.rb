@@ -1,3 +1,5 @@
+require 'turnip/rspec/example_extension'
+
 module Turnip
   module RSpec
 
@@ -29,7 +31,6 @@ module Turnip
     # count
     #
     class StepExample < ::RSpec::Core::Example
-
       attr_reader :step
       attr_accessor :result
      
@@ -54,12 +55,16 @@ module Turnip
       # custom run method which raises step specific exceptions and modifies
       # error reporting
       def run(example_group_instance, reporter)
+        @metadata[:silent] ?  reporter.silence! : reporter.speak!
+        
         @example_group_instance = example_group_instance
         @example_group_instance.example = self
        
         begin
           begin
             time = ::RSpec::Core::Time.now
+            #necessary to make the formatters work, but has the side effect of
+            #reporting on steps rather than scenarios.
             reporter.example_started(self)
             @example_group_instance.instance_eval(&@example_block)
           ensure
@@ -84,6 +89,8 @@ module Turnip
           reporter.example_failed(self)
           raise StepException.new e.message, self, e.backtrace.concat(@metadata[:caller])
         end
+      ensure
+        reporter.restore!
       end
     end
   end

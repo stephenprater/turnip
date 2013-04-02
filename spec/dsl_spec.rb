@@ -5,23 +5,17 @@ describe Turnip::DSL do
   let(:an_object) { Object.new.tap { |o| o.extend(Turnip::Execute) }}
 
   describe '.steps_for before dsl' do
+    # this seems incredibly freaking tacky, but it seems to be the way
+    # it's done in RSPEC spec itself from what I can can glean from relish
+    # app
     it "executes a feature file where steps includs before and after" do
-      result = %x(rspec -fd examples/before_steps.feature)
+      result = %x(rspec -fs examples/before_steps.feature)
       result.should include <<-OUTPUT
-Feature with before steps in steps file
 before all
-  can stick some before / after stuff in the steps file
 before each
-    Given a step
-    Given b step
 after each
-    
-  can run a before step before each scenario
 before each
-    Given a step
-    Given b step
 after each
-
 after all
       OUTPUT
     end

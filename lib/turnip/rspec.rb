@@ -4,7 +4,6 @@ require "rspec"
 require "turnip/rspec/formatter_extension"
 require "turnip/rspec/step_example"
 require "turnip/rspec/example_extension"
-require "pry"
 
 module Turnip
   module RSpec
@@ -49,7 +48,7 @@ module Turnip
 
       # Run a step example
       def run_step(feature_file, step)
-        StepExample.new(self, feature_file,step).run(self, ::RSpec.configuration.reporter)
+        StepExample.new(self, feature_file, step).run(self, ::RSpec.configuration.reporter)
       end
 
       # Run a step in "pending" state.  The step still participates in error reporting
@@ -64,14 +63,14 @@ module Turnip
     class << self
       
       def run(feature_file)
+
+        ::RSpec.configuration.reporter.extend Turnip::RSpec::ReporterExtension
         ::RSpec.configuration.formatters.each do |f|
            f.extend Turnip::RSpec::FormatterExtension
         end
 
-        ::RSpec.configuration.reporter.extend Turnip::RSpec::ReporterExtension
-
         Turnip::Builder.build(feature_file).features.each do |feature|
-          describe feature.name, feature.metadata_hash do
+          describe feature.name, { :hooks => :run }.merge(feature.metadata_hash) do
             before do
               # This is kind of a hack, but it will make RSpec throw way nicer exceptions
               example.metadata[:file_path] = feature_file
@@ -82,7 +81,7 @@ module Turnip
             end
 
             feature.scenarios.each do |scenario|
-              describe scenario.name, scenario.metadata_hash do
+              describe scenario.name, { :hooks => :dont_run }.merge(scenario.metadata_hash) do
                 # an enumerator type thing which will return nil when the steps
                 # are exhausted rather than raising StopIteration
                 step_fiber = Fiber.new do |f|
@@ -113,7 +112,7 @@ module Turnip
                 # - except it provides good backtraces and of course human
                 # readability
                 #
-                it "__scenario_example", :silent => true do |ex|
+                it "__scenario_example", :silent => true, :hooks => :run do |ex|
                   original_example = example
                   example.metadata[:line_number] = scenario.line
                   begin
@@ -134,12 +133,14 @@ module Turnip
                 end
 
                 # this is an internal step which will not participate in reporting,
-                # although steps executed WITHIN it will
+                # although steps executed WITHIN it will. all steps executed here
+                # skip hooks defined in the step file.
                 #
                 # if the step enumerator is not exhausted when this step is run then
                 # it will report all additional steps as pending with the 'parent' step
                 # in the reason
-                it "__temp_step", :silent => true do
+               
+                it "__temp_step", :silent => true, :hooks => :dont_run do
                   if scenario.pending_step?
                     while step = step_fiber.resume do
                       begin
@@ -161,7 +162,6 @@ end
 
 ::RSpec::Core::Configuration.send(:include, Turnip::RSpec::Loader)
 ::RSpec::Core::Example.send(:include, Turnip::RSpec::SilentExampleExtension)
-::Turnip::RSpec::StepExample.send(:include, Turnip::RSpec::SilentExampleExtension)
 
 ::RSpec.configure do |config|
   config.add_setting :generate_step_stubs,

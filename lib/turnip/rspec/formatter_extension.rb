@@ -73,7 +73,7 @@ module Turnip
       end
 
       def dump_summary(*args)
-        if @stubs && !@stubs.empty?
+        if @stubs && !@stubs.empty? && self.respond_to?(:dump_stubs)
           dump_stubs
         end
         super(*args)
@@ -94,14 +94,21 @@ module Turnip
           @output = arg 
         end
       end
+
+      def dump_stubs
+        output.puts <<-STUBS
+          <h2>Missing Steps:</h2>
+          <pre>#{@stubs.to_a.join("\n")}</pre>
+        STUBS
+      end
     end
 
     ##
     # 
     # The JsonFormatter doesn't actually output data in a stream, but rather
     # waits until the 'stop' method is called and then builds a hash from all of
-    # the data - address this by removing "silent" examples before the formatter
-    # flushes it's output
+    # the data - address this by intercepting "silent" examples before the formatter
+    # builds this structure
     #
     module JsonFormatterExtension
       def example_started ex
@@ -110,28 +117,7 @@ module Turnip
         end
       end
 
-      def stop
-        super
-        @output_hash[:examples] = examples.map do |example|
-          {
-            :description => example.description,
-            :full_description => example.full_description,
-            :status => example.execution_result[:status],
-            # :example_group,
-            # :execution_result,
-            :file_path => example.metadata[:file_path],
-            :line_number  => example.metadata[:line_number],
-          }.tap do |hash|
-            if e=example.exception
-              hash[:exception] =  {
-                :class => e.class.name,
-                :message => e.message,
-                :backtrace => e.backtrace,
-              }
-            end
-          end
-        end
-      end
+      def dump_stubs;end
     end
   end
 end

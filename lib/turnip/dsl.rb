@@ -19,7 +19,7 @@ module Turnip
           [:before, :after, :around].each do |hook|
             singleton_class.send(:define_method, hook) do |scope, options = {}, &blk|
               ::RSpec.configure do |config|
-                config.send(hook, scope, { tag => true }.merge(options), &blk)
+                config.send(hook, scope, { tag => true, :hooks => :run }.merge(options), &blk)
               end
             end
           end
