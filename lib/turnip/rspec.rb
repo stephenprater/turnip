@@ -1,40 +1,14 @@
 require "turnip"
 require "rspec"
+
+require "turnip/rspec/formatter_extension"
+require "turnip/rspec/step_example"
+require "turnip/rspec/example_extension"
 require "pry"
 
 module Turnip
   module RSpec
 
-    ##
-    # 
-    # This module adds a method to the formatter that it can output 
-    # 'step stubs' for steps which are pending
-    #
-    module FormatterExtension
-      def example_step_stub example
-        @stubs ||= Set.new 
-        stub = <<-STUB
-        step "#{example.step.description}" do
-          pending
-        end
-        STUB
-        indent = stub.scan(/^\s*/).min_by{ |l|l.length }
-        @stubs << stub.gsub(/#{indent}/,"")
-      end
-
-      def dump_stubs
-        output.puts "\nMissing Steps:\n\n"
-        output.puts @stubs.to_a.join("\n")
-      end
-
-      def dump_summary(*args)
-        if @stubs && !@stubs.empty?
-          dump_stubs
-        end
-        super(*args)
-      end
-    end
-    
     ##
     #
     # This module hooks Turnip into RSpec by duck punching the load Kernel
@@ -67,13 +41,19 @@ module Turnip
     # This module provides an improved method to run steps inside RSpec, adding
     # proper support for pending steps, as well as nicer backtraces.
     #
+    # These steps DO participate in RSpec reporting - so it's possible to have things
+    # like more failures (or pendings) than examples
+    #
     module Execute
       include Turnip::Execute
-      
+
+      # Run a step example
       def run_step(feature_file, step)
         StepExample.new(self, feature_file,step).run(self, ::RSpec.configuration.reporter)
       end
 
+      # Run a step in "pending" state.  The step still participates in error reporting
+      # but always returns pending because an earlier step failed.
       def pending_step feature_file, step, dependent
         StepExample.new(self, feature_file, step) do
           pending("Depends on step `#{dependent.step.keyword} #{dependent.step.description}' which #{dependent.result}")
@@ -81,93 +61,14 @@ module Turnip
       end
     end
 
-
-    ##
-    #
-    # This class provides an RSpec::Example subclass for steps, which differ
-    # from regular examples in that they live inside of an RSpec Example and
-    # provide error reporting on the step, but without modifing the example
-    # count
-    #
-    class StepExample < ::RSpec::Core::Example
-
-      attr_reader :step
-      attr_accessor :result
-      
-      def report?
-        @report
-      end
-      
-      def initialize(example, feature_file, step, &block)
-        #rewrite the scenario metadata to reflect this step
-        meta = example.class.metadata.clone
-        meta[:caller] = ["#{feature_file}:#{step.line} in step `#{step.description}'"]
-        meta[:description] = "#{step.keyword} #{step.description}"
-        meta[:type] = :step
-
-        @step = step
-        
-        if block.nil?
-          super(example.class, "-> #{meta[:description]}", meta, proc { example.step(step) })
-        else
-          @report = true
-          super(example.class, "-> #{meta[:description]}", meta, block)
-        end
-      end
-
-      def run(example_group_instance, reporter)
-        @example_group_instance = example_group_instance
-        @example_group_instance.example = self
-       
-        if pending
-          record :status => 'pending', :pending_message => String === pending ? pending : Pending::NO_REASON_GIVEN
-          reporter.example_pending self
-        else
-          begin
-            begin
-              time = ::RSpec::Core::Time.now
-              @example_group_instance.instance_eval(&@example_block)
-            ensure
-              time = (::RSpec::Core::Time.now - time).to_f
-            end
-            record :status => 'passed', :run_time => time
-            reporter.example_passed(self)
-          rescue ::RSpec::Core::Pending::PendingDeclaredInExample => e
-            record :status => 'pending', :pending_message => e.message, :run_time => time
-            reporter.example_pending(self) if report?
-            raise PendingStepException.new e.message, self, e.backtrace.concat(@metadata[:caller])
-          rescue Turnip::Pending => e
-            record :status => 'pending', :pending_message => "step does not exist", :run_time => time
-            if ::RSpec.configuration.generate_step_stubs
-              reporter.notify :example_step_stub, self
-            end
-            reporter.example_pending(self) if report?
-            raise PendingStepException.new e.message, self, e.backtrace.concat(@metadata[:caller])
-          rescue Exception => e
-            e.extend(NotPendingExampleFixed) unless e.respond_to?(:pending_fixed?)
-            record :status => 'failed', :run_time => time
-            raise StepException.new e.message, self, e.backtrace.concat(@metadata[:caller])
-          end
-        end
-      end
-    end
-
-    class StepException < StandardError
-      attr_accessor :backtrace, :step
-      def initialize(message, step, backtrace)
-        self.backtrace = backtrace
-        self.step = step
-        super(message)
-      end
-    end
-
-    class PendingStepException < StepException; end
-
     class << self
+      
       def run(feature_file)
         ::RSpec.configuration.formatters.each do |f|
            f.extend Turnip::RSpec::FormatterExtension
         end
+
+        ::RSpec.configuration.reporter.extend Turnip::RSpec::ReporterExtension
 
         Turnip::Builder.build(feature_file).features.each do |feature|
           describe feature.name, feature.metadata_hash do
@@ -182,6 +83,8 @@ module Turnip
 
             feature.scenarios.each do |scenario|
               describe scenario.name, scenario.metadata_hash do
+                # an enumerator type thing which will return nil when the steps
+                # are exhausted rather than raising StopIteration
                 step_fiber = Fiber.new do |f|
                   scenario.steps.each do |step|
                     Fiber.yield step
@@ -191,12 +94,13 @@ module Turnip
 
                 # what is going on here?
                 # an "it" block creates an RSpec example for later execution
-                # but steps are not equivalent to an example.  The more
-                # appropriate mapping is from steps to assertions.  the problem
-                # being is that each assert depends on all prior assertions
-                # running successfully, so without REALLY abusing state and
-                # a lot spooky action at a distance programming it doesn't make
-                # sense to map examples to steps.
+                # but steps are not equivalent to an example, since they should
+                # run in the same context. The more appropriate mapping is from steps to assertions.
+                # The problem being that assertions do not participate in RSpec reporting
+                # the same way an example does.  So without REALLY abusing global state and
+                # a lot spooky action at a distance it doesn't make
+                # sense to map examples to steps. (you'd basically need to
+                # rewrite the entire CONCEPT of an example)
                 #
                 # instead, we run each step within an example - and change the
                 # name of the example based on the execution step that failed.
@@ -204,24 +108,7 @@ module Turnip
                 # - except it provides good backtraces and of course human
                 # readability
                 #
-                
-                after :each do |ex|
-                  ::RSpec.configuration.formatters.each do |f|
-                    f.instance_eval do
-                      #remove the 'temporary step holders'
-                      @examples.reject! do |example|
-                        example.metadata[:description] ==  "__temp_step"
-                      end
-                      #and put the scenario outcomes at the top of the list
-                      @examples.sort_by! do |example|
-                        example.metadata[:feature_example] == true ? 1 : -1
-                      end
-                    end
-                  end
-                end
-                
-                
-                it "\0", :feature_example => true do |ex|
+                it "__scenario_example", :silent => true do |ex|
                   original_example = example
                   example.metadata[:line_number] = scenario.line
                   begin
@@ -232,16 +119,23 @@ module Turnip
                     original_example.metadata[:description] = e.step.description
                     scenario.pending_step = e.step
                     e.step.result = "is pending"
-                    pending(e.message)
+                    #if a step is pending, rewrite the metadata and declare the example pending
                   rescue StepException => e
                     original_example.metadata[:description] = e.step.description
                     scenario.pending_step = e.step
                     e.step.result = "failed"
-                    raise e
+                    #if a step failed, rewrite the metadata and declare the example failed
                   end
                 end
 
-                it "__temp_step" do
+                # this is an internal step which will not participate in reporting,
+                # although steps executed WITHIN it will
+                #
+                # if the step enumerator is not exhausted when this step is run then
+                # it will report all additional steps as pending with the 'parent' step
+                # in the reason
+               
+                it "__temp_step", :silent => true do
                   if scenario.pending_step?
                     while step = step_fiber.resume do
                       begin
@@ -251,7 +145,6 @@ module Turnip
                     end
                   end
                 end
-
               end
             end
           end
@@ -261,7 +154,10 @@ module Turnip
   end
 end
 
+
 ::RSpec::Core::Configuration.send(:include, Turnip::RSpec::Loader)
+::RSpec::Core::Example.send(:include, Turnip::RSpec::SilentExampleExtension)
+::Turnip::RSpec::StepExample.send(:include, Turnip::RSpec::SilentExampleExtension)
 
 ::RSpec.configure do |config|
   config.add_setting :generate_step_stubs,
