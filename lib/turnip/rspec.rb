@@ -1,5 +1,6 @@
 require "turnip"
 require "rspec"
+require 'pry'
 
 require "turnip/rspec/formatter_extension"
 require "turnip/rspec/step_example"
@@ -71,16 +72,24 @@ module Turnip
 
         Turnip::Builder.build(feature_file).features.each do |feature|
           describe feature.name, { :hooks => :run }.merge(feature.metadata_hash) do
+            # we want class variables here because we want them shared across
+            # all the scenarios, which are defined
+            define_singleton_method(:in_hook)  { @@in_hook }
+            define_singleton_method(:in_hook=) { |hk| @@in_hook = hk }
+
             before do
               # This is kind of a hack, but it will make RSpec throw way nicer exceptions
               example.metadata[:file_path] = feature_file
 
               feature.backgrounds.map(&:steps).flatten.each do |step|
-                run_step(feature_file, step)
+                begin
+                  run_step(feature_file, step)
+                end
               end
             end
 
             feature.scenarios.each do |scenario|
+              
               describe scenario.name, { :hooks => :dont_run }.merge(scenario.metadata_hash) do
                 # an enumerator type thing which will return nil when the steps
                 # are exhausted rather than raising StopIteration
@@ -91,7 +100,6 @@ module Turnip
                   nil
                 end
 
-                
 
                 # what is going on here?
                 # an "it" block creates an RSpec example for later execution
@@ -169,7 +177,7 @@ end
   config.include Turnip::RSpec::Execute, turnip: true
   config.include Turnip::Steps, turnip: true
   config.pattern << ",**/*.feature"
-  config.backtrace_clean_patterns << /lib\/turnip/
+  config.backtrace_clean_patterns << /lib\/turnip/ 
   if ENV['STUBS']
     config.generate_step_stubs = true
   end

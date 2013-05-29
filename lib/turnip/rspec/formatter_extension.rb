@@ -48,6 +48,8 @@ module Turnip
         base.class.send :attr_accessor, :output
         base.loud_output = base.output.clone
 
+        # these can be replaced with prepend when only ruby 2.0 is 
+        # supported
         case base
         when ::RSpec::Core::Formatters::HtmlFormatter
           base.extend Turnip::RSpec::HtmlFormatterExtension

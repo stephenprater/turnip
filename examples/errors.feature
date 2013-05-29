@@ -1,3 +1,4 @@
+@errors
 Feature: raises errors
   Scenario: Step missing
     When a step just does not exist

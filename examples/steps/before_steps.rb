@@ -1,3 +1,5 @@
+require 'pry'
+
 steps_for(:before) do
   before :all do
     puts "before all"
@@ -19,5 +21,15 @@ steps_for(:before) do
   end
 
   step "b step" do
+  end
+end
+
+steps_for(:errors) do
+  before :each do
+    raise 'ermahgerhd'
+  end
+
+  before :all do
+    raise 'before all'
   end
 end

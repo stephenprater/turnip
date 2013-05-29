@@ -26,9 +26,33 @@ module Turnip
         end
       end
 
+      ## 
+      #
+      # called when a before / after hook fails or when the invisible example
+      # fails.  clean up the backtrace and report something useful.
+      #
+      def fail_with_exception_with_silent(reporter, exception)
+        if example_group.respond_to?(:in_hook) && hook = example_group.in_hook
+          begin
+            fail_with_exception_without_silent(reporter, exception)
+            self.metadata[:description] = "in `#{hook}' hook for scenario #{self.example_group.description}"
+            self.metadata[:full_description] = self.metadata[:description]
+            self.metadata[:file_path], self.metadata[:line_number] = exception.backtrace.first.split(':').slice(0..1)
+          ensure
+          end
+        else
+          fail_with_exception_without_silent(reporter, exception)
+        end
+      end
+
       def self.included base
         base.send :alias_method, :run_without_silent, :run
         base.send :alias_method, :run, :run_with_silent
+
+        base.send :alias_method, :fail_with_exception_without_silent, :fail_with_exception
+        base.send :alias_method, :fail_with_exception, :fail_with_exception_with_silent
+
+        base.send :attr_accessor, :in_hook
       end
     end
   end
